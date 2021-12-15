@@ -1,5 +1,5 @@
 use std::{
-    collections::BinaryHeap,
+    collections::VecDeque,
     io::{self, BufRead as _},
 };
 
@@ -69,12 +69,12 @@ fn main() {
     let w = map[0].len();
     let mut search = vec![vec![u32::MAX; w]; h];
     search[0][0] = 0;
-    let mut qju = BinaryHeap::new();
-    qju.push((0, (0, 0)));
+    let mut qju = VecDeque::new();
+    qju.push_back((0, 0));
 
     let mut max_dest = u32::MAX;
 
-    while let Some((_, (x, y))) = qju.pop() {
+    while let Some((x, y)) = qju.pop_front() {
         let c = search[y][x];
         if (x, y) == (w - 1, h - 1) {
             max_dest = std::cmp::min(max_dest, c);
@@ -85,7 +85,7 @@ fn main() {
             if search[y1][x1] > new {
                 search[y1][x1] = new;
                 if new < max_dest {
-                    qju.push((new, (x1, y1)));
+                    qju.push_back((x1, y1));
                 }
             }
         }
