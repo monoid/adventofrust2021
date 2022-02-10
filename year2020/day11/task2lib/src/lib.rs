@@ -124,10 +124,7 @@ fn next_map(map: &Map, vis_map: &FlatMap<Vec<usize>>) -> Map {
     )
 }
 
-pub fn main() {
-    let stdin = io::stdin();
-    let stdin = stdin.lock();
-    let map = lib::read_map(stdin);
+pub fn solve(map: lib::Map) -> usize {
     let mut map = FlatMap::from_2d(map);
     let vis_map = produce_visibility_map(&map);
 
@@ -140,10 +137,14 @@ pub fn main() {
             map = new_map;
         }
     }
-    println!(
-        "{}",
-        map.iter()
-            .filter(|&&state| state == lib::State::Occupied)
-            .count()
-    )
+    map.iter()
+       .filter(|&&state| state == lib::State::Occupied)
+       .count()
+}
+
+pub fn main() {
+    let stdin = io::stdin();
+    let stdin = stdin.lock();
+    let map = lib::read_map(stdin);
+    println!("{}", solve(map));
 }
