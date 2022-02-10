@@ -10,11 +10,25 @@ version = "0.1.0"
 name = "task1"
 version = "0.1.0"
 dependencies = [
+ "task1lib",
+]
+
+[[package]]
+name = "task1lib"
+version = "0.1.0"
+dependencies = [
  "lib",
 ]
 
 [[package]]
 name = "task2"
+version = "0.1.0"
+dependencies = [
+ "task2lib",
+]
+
+[[package]]
+name = "task2lib"
 version = "0.1.0"
 dependencies = [
  "lib",

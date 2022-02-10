@@ -1,6 +1,8 @@
 [workspace]
 members = [
 	"task1",
+	"task1lib",
 	"task2",
+	"task2lib",
 	"lib",
 ]
