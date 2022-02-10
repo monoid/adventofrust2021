@@ -1,7 +1,7 @@
 use std::io;
 
 #[derive(PartialEq, Clone)]
-struct FlatMap<V> {
+pub struct FlatMap<V> {
     width: usize,
     height: usize,
     data: Vec<V>,
@@ -18,13 +18,13 @@ impl<T: Clone> FlatMap<T> {
         }
     }
 
-    fn from_2d(data: Vec<Vec<T>>) -> Self {
+    pub fn from_2d(data: &[Vec<T>]) -> Self {
         let height = data.len();
         let width = data[0].len();
         let res = Self::from_iter(
             width,
             height,
-            data.into_iter().flat_map(|line| line.into_iter()),
+            data.iter().flat_map(|line| line.iter().cloned()),
         );
         assert!(res.data.len() == width * height);
         res
@@ -55,7 +55,7 @@ impl<V> std::ops::DerefMut for FlatMap<V> {
 
 type Map = FlatMap<lib::State>;
 
-fn visibility(map: &Map, y: usize, x: usize) -> Vec<usize> {
+fn visibility(map: &Map, y: usize, x: usize) -> arrayvec::ArrayVec<u16, 8> {
     [
         (0isize, 1isize),
         (1, 1),
@@ -76,7 +76,7 @@ fn visibility(map: &Map, y: usize, x: usize) -> Vec<usize> {
                 sy += dy;
                 sx += dx;
             } else {
-                return Some(pos);
+                return Some(pos as _);
             }
         }
         None
@@ -84,58 +84,55 @@ fn visibility(map: &Map, y: usize, x: usize) -> Vec<usize> {
     .collect()
 }
 
-fn produce_visibility_map(map: &Map) -> FlatMap<Vec<usize>> {
-    FlatMap::from_iter(
-        map.width,
-        map.height,
-        (0..map.height).flat_map(|y| (0..map.width).map(move |x| visibility(map, y, x))),
-    )
+pub fn produce_visibility_map(map: &Map) -> Vec<(arrayvec::ArrayVec<u16, 8>, usize)> {
+    (0..map.height)
+            .flat_map(|y| (0..map.width).map(move |x| (y, x)))
+            .filter_map(|(y, x)| {
+                let ind = map.index(y as _, x as _).unwrap();
+                if map[ind] == lib::State::Floor {
+                    None
+                } else {
+                    Some((visibility(map, y, x), ind))
+                }
+            }).collect()
 }
 
-fn next_map(map: &Map, vis_map: &FlatMap<Vec<usize>>) -> Map {
-    Map::from_iter(
-        map.width,
-        map.height,
-        map.iter().zip(vis_map.iter()).map(|(&c, vis)| match c {
-            lib::State::Floor => c,
+fn next_map(map: &Map, into: &mut Map, vis_map: &[(arrayvec::ArrayVec<u16, 8>, usize)]) -> bool {
+    let mut changed = false;
+    into.data.fill(lib::State::Floor);
+
+    for (vis, pos) in vis_map {
+        let occ = vis.iter().filter(|&&pos| map[pos as usize] == lib::State::Occupied).count();
+        match map[*pos] {
             lib::State::Occupied => {
-                let occ = vis
-                    .iter()
-                    .filter(|&&pos| map[pos] == lib::State::Occupied)
-                    .count();
-                if occ >= 5 {
+                into[*pos] = if occ >= 5 {
+                    changed = true;
                     lib::State::Empty
                 } else {
-                    c
-                }
+                    lib::State::Occupied
+                };
             }
             lib::State::Empty => {
-                let occ = vis
-                    .iter()
-                    .filter(|&&pos| map[pos] == lib::State::Occupied)
-                    .count();
-                if occ == 0 {
+                into[*pos] = if occ == 0 {
+                    changed = true;
                     lib::State::Occupied
                 } else {
-                    c
-                }
+                    lib::State::Empty
+                };
             }
-        }),
-    )
+            lib::State::Floor => loop {}
+        }
+    }
+    changed
 }
 
-pub fn solve(map: lib::Map) -> usize {
+pub fn solve(map: &lib::Map) -> usize {
     let mut map = FlatMap::from_2d(map);
+    let mut map2 = map.clone();
     let vis_map = produce_visibility_map(&map);
 
-    loop {
-        let new_map = next_map(&map, &vis_map);
-
-        if map == new_map {
-            break;
-        } else {
-            map = new_map;
-        }
+    while next_map(&map, &mut map2, &vis_map) {
+        std::mem::swap(&mut map, &mut map2);
     }
     map.iter()
        .filter(|&&state| state == lib::State::Occupied)
@@ -146,5 +143,5 @@ pub fn main() {
     let stdin = io::stdin();
     let stdin = stdin.lock();
     let map = lib::read_map(stdin);
-    println!("{}", solve(map));
+    println!("{}", solve(&map));
 }
