@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 #[derive(Debug)]
 pub struct Line {
     pub chars: Vec<u8>,
@@ -18,131 +16,63 @@ impl Line {
     }
 
     pub fn count_possibilities(&self) -> u64 {
-        // We should iterate only over possible positions (i.e. only positions with '#' and '?')
-        // Or not, as it doens't seem to improve a lot.
-        let mut pos_buf = Vec::<State>::with_capacity(self.groups.len());
-        let mut counter = 0u64;
+        // the table:
+        //    vec[group_num][offset]: how many valid combinations can exists if (group_num + 1) last groups
+        //                            are placed starting from the offset (i.e. if the first placed group
+        //                            is located at offset, and other are further).
+        let mut state: Vec<Vec<u64>> = vec![vec![0; self.chars.len()]; self.groups.len()];
 
-        // The init loop
-        loop {
-            while pos_buf.len() < self.groups.len() {
-                // loop over what?
-                let next_available_pos = pos_buf
-                    .last()
-                    .map(|state| state.pos + state.group_len + 1)
-                    .unwrap_or(0);
-
-                let current_group = pos_buf.len();
-                let state = State {
-                    pos: next_available_pos as _,
-                    group_len: self.groups[current_group] as _,
-                    possible: next_available_pos + 1..(self.chars.len() as u8),
-                };
-                match state.place(&self.chars) {
-                    Some(placed_state) => {
-                        pos_buf.push(placed_state);
-                    }
-                    None => break, // rollback
-                }
-            }
-            if pos_buf.len() == self.groups.len() && in_constraints(&pos_buf, &self.chars) {
-                counter += 1;
-            }
-
-            while !pos_buf.is_empty() {
-                let top_state = pos_buf.pop().expect("TODO");
-                if let Some(new_top_state) = top_state.advance() {
-                    if let Some(placed_top_state) = new_top_state.place(&self.chars) {
-                        pos_buf.push(placed_top_state);
-                        break;
-                    }
-                }
-            }
-            if pos_buf.is_empty() {
-                break;
+        // Start filing the table.
+        let last_group_len = *self.groups.last().unwrap();
+        for (pos, cell) in state[0].iter_mut().enumerate() {
+            if pos + last_group_len > self.chars.len() {
+                // cannot span that much
+                *cell = 0;
+            } else if can_be_placed_at(last_group_len, &self.chars[pos..pos + last_group_len])
+                && can_be_free(&self.chars[pos + last_group_len..])
+            {
+                *cell = 1;
+            } else {
+                *cell = 0;
             }
         }
 
-        counter
-    }
-}
+        for (idx, group_len) in self.groups.iter().rev().enumerate().skip(1) {
+            assert!(idx > 0);
+            for pos in 0..self.chars.len() {
+                if pos + group_len > self.chars.len() {
+                    // cannot span that much
+                    state[idx][pos] = 0;
+                } else {
+                    let mut cnt = 0;
+                    for next_pos in pos + group_len + 1..self.chars.len() {
+                        if can_be_placed_at(*group_len, &self.chars[pos..pos + group_len])
+                            && can_be_free(&self.chars[pos + group_len..next_pos])
+                        {
+                            cnt += state[idx - 1][next_pos];
+                        }
+                    }
+                    state[idx][pos] = cnt;
+                }
+            }
+        }
 
-fn in_constraints(groups: &[State], chars: &[u8]) -> bool {
-    assert!(!groups.is_empty());
-    if !chars[0..groups[0].pos as usize]
-        .iter()
-        .cloned()
-        .all(|b| b != b'#')
-    {
-        return false;
-    }
-    let last = groups.last().unwrap();
-    if !chars[(last.pos + last.group_len) as usize..]
-        .iter()
-        .cloned()
-        .all(|b| b != b'#')
-    {
-        return false;
-    }
-    for idx in 1..groups.len() {
-        let p0 = groups[idx - 1].pos + groups[idx - 1].group_len;
-        let p1 = groups[idx].pos;
-
-        if !chars[p0 as usize..p1 as usize]
+        state
+            .last()
+            .unwrap()
             .iter()
-            .cloned()
-            .all(|b| b != b'#')
-        {
-            return false;
-        }
+            .enumerate()
+            .map(|(pos, cnt)| cnt * (can_be_free(&self.chars[..pos]) as u64))
+            .sum()
     }
-    true
 }
 
-#[derive(Debug, Clone)]
-struct State {
-    pos: u8,
-    group_len: u8,
-    possible: Range<u8>,
+fn can_be_placed_at(group_len: usize, part: &[u8]) -> bool {
+    part[..group_len].iter().all(|c| *c != b'.')
 }
 
-impl State {
-    fn matches(&self, line: &[u8]) -> bool {
-        if self.pos + self.group_len > line.len() as u8 {
-            return false;
-        }
-        line[self.pos as usize..(self.pos + self.group_len) as usize]
-            .iter()
-            .cloned()
-            .all(|b| b != b'.')
-    }
-
-    fn advance(mut self) -> Option<Self> {
-        self.possible.next().map(|next_pos| {
-            self.pos = next_pos;
-            self
-        })
-    }
-
-    fn place(self, line: &[u8]) -> Option<Self> {
-        let mut self_ = self;
-        if self_.matches(line) {
-            return Some(self_);
-        }
-        loop {
-            match self_.advance() {
-                Some(new_self) => {
-                    if new_self.matches(line) {
-                        return Some(new_self);
-                    } else {
-                        self_ = new_self;
-                    }
-                }
-                None => break,
-            }
-        }
-        None
-    }
+fn can_be_free(part: &[u8]) -> bool {
+    part.iter().all(|c| *c != b'#')
 }
 
 pub fn read_data() -> Vec<Line> {
@@ -161,7 +91,7 @@ pub fn read_data5x() -> Vec<Line> {
         .map(|line| {
             let line = line.unwrap();
             let (a, b) = line.trim().split_once(' ').unwrap();
-            Line::parse_line(&format!("{a}{a}{a}{a}{a} {b},{b},{b},{b},{b}"))
+            Line::parse_line(&format!("{a}?{a}?{a}?{a}?{a} {b},{b},{b},{b},{b}"))
         })
         .collect()
 }
