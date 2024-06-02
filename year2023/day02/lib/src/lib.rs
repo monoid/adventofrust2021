@@ -84,7 +84,7 @@ fn parse_pull(inp: &str) -> IResult<&str, (&'static str, u32)> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_game, Game, SITUATION};
+    use crate::{parse_game, situation, Game};
     use maplit::hashmap;
 
     #[test]
@@ -118,7 +118,7 @@ mod tests {
         let inp = "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green";
         let game = parse_game(inp).unwrap().1;
 
-        assert!(game.is_possible(&SITUATION))
+        assert!(game.is_possible(&situation()))
     }
 
     #[test]
@@ -126,6 +126,6 @@ mod tests {
         let inp = "Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red";
         let game = parse_game(inp).unwrap().1;
 
-        assert!(!game.is_possible(&SITUATION))
+        assert!(!game.is_possible(&situation()))
     }
 }
